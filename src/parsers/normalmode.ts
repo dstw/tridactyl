@@ -3,6 +3,9 @@
     differs from Vim in that no map may be a prefix of another map (e.g. 'g' and 'gg' cannot both be maps). This simplifies the parser.
 */
 
+// new way: import keyseq as blah
+// parse(key, mapstrMapToKeyMap(nmaps)), should be drop in replacement, returns you an exstring
+
 import * as config from '../config'
 
 let nmaps = config.get("nmaps")

@@ -15,14 +15,20 @@ import {log} from './math'
 import {permutationsWithReplacement, islice, izip, map} from './itertools'
 import {hasModifiers} from './keyseq'
 import state from './state'
-import {messageActiveTab} from './messaging'
+import {messageActiveTab, message} from './messaging'
 import * as config from './config'
 import * as TTS from './text_to_speech'
+import {HintSaveType} from './hinting_background'
+import Logger from './logging'
+const logger = new Logger('hinting')
 
 /** Simple container for the state of a single frame's hints. */
 class HintState {
     public focusedHint: Hint
-    readonly hintHost = html`<div class="TridactylHintHost">`
+    readonly hintHost = document.createElement('div')
+    constructor(){
+        this.hintHost.classList.add("TridactylHintHost")
+    }
     readonly hints: Hint[] = []
     public filter = ''
     public hintchars = ''
@@ -44,18 +50,18 @@ let modeState: HintState = undefined
 export function hintPage(
     hintableElements: Element[],
     onSelect: HintSelectedCallback,
-    names = hintnames_uniform(hintableElements.length),
+    names = hintnames(hintableElements.length),
 ) {
     state.mode = 'hint'
     modeState = new HintState()
     for (let [el, name] of izip( hintableElements, names)) {
-        console.log({el, name})
+        logger.debug({el, name})
         modeState.hintchars += name
         modeState.hints.push(new Hint(el, name, onSelect))
     }
 
     if (modeState.hints.length) {
-        console.log("HINTS", modeState.hints)
+        logger.debug("hints", modeState.hints)
         modeState.focusedHint = modeState.hints[0]
         modeState.focusedHint.focused = true
         document.body.appendChild(modeState.hintHost)
@@ -65,14 +71,24 @@ export function hintPage(
 }
 
 /** vimperator-style minimal hint names */
-function* hintnames(hintchars = config.get("hintchars")): IterableIterator<string> {
+function* hintnames(n: number, hintchars = config.get("hintchars")): IterableIterator<string> {
     let taglen = 1
+    var source = permutationsWithReplacement(hintchars, taglen)
+    for (let i = 0;i < Math.floor(n / hintchars.length);i++) {
+        // drop hints that will be used as the prefix of longer hints
+        if (source.next()['done']) {
+            // if the current taglen tags are exhausted, increase the length
+            taglen++
+            source = permutationsWithReplacement(hintchars, taglen)
+            source.next()
+        }
+    }
     while (true) {
-        yield* map(permutationsWithReplacement(hintchars, taglen), e=>{
-            if (config.get("hintorder") == "reverse") e = e.reverse()
+        yield* map(source, e=>{
             return e.join('')
         })
         taglen++
+        source = permutationsWithReplacement(hintchars, taglen)
     }
 }
 
@@ -86,7 +102,6 @@ function* hintnames_uniform(n: number, hintchars = config.get("hintchars")): Ite
         // And return first n permutations
         yield* map(islice(permutationsWithReplacement(hintchars, taglen), n),
             perm => {
-                if (config.get("hintorder") == "reverse") perm = perm.reverse()
                 return perm.join('')
             })
     }
@@ -209,6 +224,12 @@ function elementswithtext() {
     )
 }
 
+/** Returns elements that point to a saveable resource
+ */
+function saveableElements() {
+    return DOM.getElemsBySelector(HINTTAGS_saveable, [DOM.isVisible])
+}
+
 /** Get array of images in the viewport
  */
 function hintableImages() {
@@ -222,6 +243,12 @@ function anchors() {
     return DOM.getElemsBySelector(HINTTAGS_anchor_selectors, [DOM.isVisible])
 }
 
+/** Array of items that can be killed with hint kill
+ */
+function killables() {
+    return DOM.getElemsBySelector(HINTTAGS_killable_selectors, [DOM.isVisible])
+}
+
 // CSS selectors. More readable for web developers. Not dead. Leaves browser to care about XML.
 const HINTTAGS_selectors = `
 input:not([type=hidden]):not([disabled]),
@@ -231,6 +258,7 @@ iframe,
 textarea,
 button,
 select,
+summary,
 [onclick],
 [onmouseover],
 [onmousedown],
@@ -265,6 +293,22 @@ img,
 const HINTTAGS_anchor_selectors = `
 [id],
 [name]
+`
+
+const HINTTAGS_killable_selectors = `
+span,
+div,
+iframe,
+img,
+button,
+article,
+summary
+`
+
+/** CSS selector for elements which point to a saveable resource
+ */
+const HINTTAGS_saveable = `
+[href]:not([href='#'])
 `
 
 import {activeTab, browserBg, l, firefoxVersionAtLeast} from './lib/webext'
@@ -374,8 +418,46 @@ function hintRead() {
     })
 }
 
+/** Hint elements and delete the selection from the page
+ */
+function hintKill() {
+    hintPage(killables(), hint=>{
+        hint.target.remove();
+    })
+}
+
+/** Hint link elements to save
+ *
+ * @param hintType  the type of elements to hint and save:
+ *                      - "link": elements that point to another resource (eg
+ *                        links to pages/files) - the link targer is saved
+ *                      - "img": image elements
+ * @param saveAs    prompt for save location
+ */
+function hintSave(hintType: HintSaveType, saveAs: boolean) {
+
+    function saveHintElems(hintType) {
+        return (hintType === "link") ? saveableElements() : hintableImages()
+    }
+
+    function urlFromElem(hintType, elem) {
+        return (hintType === "link") ? elem.href : elem.src
+    }
+
+    hintPage(saveHintElems(hintType), hint=>{
+
+        const urlToSave = new URL(urlFromElem(hintType, hint.target),
+            window.location.href)
+
+        // Pass to background context to allow saving from data URLs.
+        // Convert to href because can't clone URL across contexts
+        message('download_background', "downloadUrl",
+            [urlToSave.href, saveAs])
+    })
+}
+
 function selectFocusedHint() {
-    console.log("Selecting hint.", state.mode)
+    logger.debug("Selecting hint.", state.mode)
     const focused = modeState.focusedHint
     reset()
     focused.select()
@@ -394,4 +476,6 @@ addListener('hinting_content', attributeCaller({
     hintImage,
     hintFocus,
     hintRead,
+    hintKill,
+    hintSave,
 }))

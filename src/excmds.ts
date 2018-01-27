@@ -4,35 +4,61 @@
 
     Use `:help <excmd>` or scroll down to show [[help]] for a particular excmd.
 
-    The default keybinds can be found [here](/static/docs/modules/_parsers_normalmode_.html#defaultnmaps).
+    The default keybinds can be found [here](/static/docs/modules/_config_.html#defaults)
 
-    Tridactyl is in a pretty early stage of development. Please report any issues and make requests for missing features on the GitHub project page [[1]].
+    Tridactyl is in a pretty early stage of development. Please report any
+    issues and make requests for missing features on the GitHub [project page][1].
+    You can also get in touch using Matrix, Gitter, or IRC chat clients:
 
-    Highlighted features:
+    [![Matrix Chat][matrix-badge]][matrix-link]
+    [![Gitter Chat][gitter-badge]][gitter-link]
+    [![Freenode Chat][freenode-badge]][freenode-link]
 
-    - Press `b` to bring up a list of open tabs in the current window; you can type the tab ID or part of the title or URL to choose a tab (the buffer list doesn't show which one you've selected yet, but it does work)
-    - Press `I` to enter ignore mode. `Shift` + `Escape` to return to normal mode.
+    All three channels are mirrored together, so it doesn't matter which one you use.
+
+    ## Highlighted features:
+
+    - Press `b` to bring up a list of open tabs in the current window; you can
+      type the tab ID or part of the title or URL to choose a tab
+    - Press `I` to enter ignore mode. `Shift` + `Escape` to return to normal
+      mode.
     - Press `f` to start "hint mode", `F` to open in background
     - Press `o` to `:open` a different page
-    - Press `s` if you want to search for something that looks like a domain name or URL
+    - Press `s` if you want to search for something that looks like a domain
+      name or URL
     - [[bind]] new commands with e.g. `:bind J tabnext`
     - Type `:help` to see a list of available excmds
     - Use `yy` to copy the current page URL to your clipboard
-    - `]]` and `[[` to navigate through the pages of comics, paginated articles, etc
-    - Pressing `ZZ` will close all tabs and windows, but it will only "save" them if your about:preferences are set to "show your tabs and windows from last time"
+    - `]]` and `[[` to navigate through the pages of comics, paginated
+      articles, etc
+    - Pressing `ZZ` will close all tabs and windows, but it will only "save"
+      them if your about:preferences are set to "show your tabs and windows
+      from last time"
 
     There are some caveats common to all webextension vimperator-alikes:
 
-    - Do not try to navigate to any about:\* pages using `:open` as it will fail silently
-    - Firefox will not load Tridactyl on addons.mozilla.org, about:\*, some file:\* URIs, view-source:\*, or data:\*. On these pages Ctrl-L (or F6), Ctrl-Tab and Ctrl-W are your escape hatches
-    - Tridactyl does not currently support changing/hiding the Firefox GUI, but you can do it yourself by changing your userChrome. There is an example file available on our repository [[2]]
+    - Do not try to navigate to any about:\* pages using `:open` as it will
+      fail silently
+    - Firefox will not load Tridactyl on addons.mozilla.org, about:\*, some
+      file:\* URIs, view-source:\*, or data:\*. On these pages Ctrl-L (or F6),
+      Ctrl-Tab and Ctrl-W are your escape hatches
+    - Tridactyl does not currently support changing/hiding the Firefox GUI, but
+      you can do it yourself by changing your userChrome. There is an [example
+      file](2) available in our repository.
 
-    If you want a more fully-featured vimperator-alike, your best option is Firefox ESR [[3]] and Vimperator :)
+    If you want a more fully-featured vimperator-alike, your best option is
+    [Firefox ESR](3) and Vimperator :)
 
     [1]: https://github.com/cmcaine/tridactyl/issues
     [2]: https://github.com/cmcaine/tridactyl/blob/master/src/static/userChrome-minimal.css
     [3]: https://www.mozilla.org/en-US/firefox/organizations/
 
+    [gitter-badge]: /static/badges/gitter-badge.svg
+    [gitter-link]: https://gitter.im/tridactyl/Lobby
+    [freenode-badge]: /static/badges/freenode-badge.svg
+    [freenode-link]: ircs://chat.freenode.net/tridactyl
+    [matrix-badge]: https://matrix.to/img/matrix-badge.svg
+    [matrix-link]: https://riot.im/app/#/room/#tridactyl:matrix.org
 */
 /** ignore this line */
 
@@ -40,6 +66,7 @@
 
 import * as Messaging from "./messaging"
 import {l} from './lib/webext'
+import state from "./state"
 
 //#content_omit_line
 import "./number.clamp"
@@ -54,46 +81,26 @@ import {messageActiveTab} from './messaging'
 //#background_helper
 import "./number.mod"
 //#background_helper
-import state from "./state"
-//#background_helper
 import {ModeName} from './state'
 //#background_helper
 import * as keydown from "./keydown_background"
 //#background_helper
 import {activeTab, activeTabId, firefoxVersionAtLeast} from './lib/webext'
 //#content_helper
-import {incrementUrl, getUrlRoot, getUrlParent} from "./url_util"
+import * as UrlUtil from "./url_util"
 //#background_helper
 import * as CommandLineBackground from './commandline_background'
 //#content_helper
 import * as DOM from './dom'
 
 import * as config from './config'
+import * as Logging from "./logging"
+const logger = new Logging.Logger('excmds')
 
 
 /** @hidden */
 //#background_helper
 export const cmd_params = new Map<string, Map<string, string>>()
-
-const SEARCH_URLS = new Map<string, string>([
-    ["google","https://www.google.com/search?q="],
-    ["googleuk","https://www.google.co.uk/search?q="],
-    ["bing","https://www.bing.com/search?q="],
-    ["duckduckgo","https://duckduckgo.com/?q="],
-    ["yahoo","https://search.yahoo.com/search?p="],
-    ["twitter","https://twitter.com/search?q="],
-    ["wikipedia","https://en.wikipedia.org/wiki/Special:Search/"],
-    ["youtube","https://www.youtube.com/results?search_query="],
-    ["amazon","https://www.amazon.com/s/ref=nb_sb_noss?url=search-alias%3Daps&field-keywords="],
-    ["amazonuk","https://www.amazon.co.uk/s/ref=nb_sb_noss?url=search-alias%3Daps&field-keywords="],
-    ["startpage","https://www.startpage.com/do/search?query="],
-    ["github","https://github.com/search?utf8=✓&q="],
-    ["searx","https://searx.me/?category_general=on&q="],
-    ["cnrtl","http://www.cnrtl.fr/lexicographie/"],
-    ["osm","https://www.openstreetmap.org/search?query="],
-    ["mdn","https://developer.mozilla.org/en-US/search?q="],
-    ["gentoo_wiki","https://wiki.gentoo.org/index.php?title=Special%3ASearch&profile=default&fulltext=Search&search="],
-])
 
 // map a page-relation (next or previous) to a fallback pattern to match link texts against
 const REL_PATTERN = {
@@ -109,23 +116,24 @@ function hasScheme(uri: string) {
 /** @hidden */
 function searchURL(provider: string, query: string) {
     if (provider == "search") provider = config.get("searchengine")
-    if (SEARCH_URLS.has(provider)) {
-        const url = new URL(SEARCH_URLS.get(provider) + encodeURIComponent(query))
-        // URL constructor doesn't convert +s because they're valid literals in
-        // the standard it adheres to. But they are special characters in
-        // x-www-form-urlencoded and e.g. google excepts query parameters in
-        // that format.
-        url.search = url.search.replace(/\+/g, '%2B')
-        return url
-    } else {
+    const searchurlprovider = config.get("searchurls", provider)
+    if (searchurlprovider === undefined){
         throw new TypeError(`Unknown provider: '${provider}'`)
     }
+
+    // build search URL: either replace "%s" in URL with query or append query to URL
+    const url = searchurlprovider.includes("%s") ?
+        new URL(searchurlprovider.replace("%s", encodeURIComponent(query))) :
+        new URL(searchurlprovider + encodeURIComponent(query))
+
+    return url
 }
 
 /** If maybeURI doesn't have a schema, affix http:// */
 /** @hidden */
 function forceURI(maybeURI: string): string {
-    if (maybeURI === undefined) return maybeURI
+    // Need undefined to be able to open about:newtab
+    if (maybeURI == "") return undefined
     try {
         return new URL(maybeURI).href
     } catch (e) {
@@ -137,7 +145,6 @@ function forceURI(maybeURI: string): string {
         const args = maybeURI.split(' ')
         return searchURL(args[0], args.slice(1).join(' ')).href
     } catch (e) {
-        console.log(e)
         if (e.name !== 'TypeError') throw e
     }
 
@@ -164,6 +171,33 @@ function tabSetActive(id: number) {
 
 // }}}
 
+// {{{ INTERNAL/DEBUG
+
+/**
+ * Set the logging level for a given logging module.
+ *
+ * @param logModule     the logging module to set the level on
+ * @param level         the level to log at: in increasing verbosity, one of
+ *                      "never", "error", "warning", "info", "debug"
+ */
+//#background
+export function loggingsetlevel(logModule: string, level: string) {
+    const map = {
+        "never": Logging.LEVEL.NEVER,
+        "error": Logging.LEVEL.ERROR,
+        "warning": Logging.LEVEL.WARNING,
+        "info": Logging.LEVEL.INFO,
+        "debug": Logging.LEVEL.DEBUG,
+    }
+
+    let newLevel = map[level.toLowerCase()]
+
+    if (newLevel !== undefined) {
+        config.set("logging", newLevel, logModule)
+    }
+}
+
+// }}}
 
 // {{{ PAGE CONTEXT
 
@@ -178,21 +212,25 @@ export function scrollpx(a: number, b: number) {
     window.scrollBy(a, b)
 }
 
-/** If one argument is given, scroll to that percentage down the page.
-    If two arguments are given, treat as x and y values to give to window.scrollTo
+/** If two numbers are given, treat as x and y values to give to window.scrollTo
+    If one number is given, scroll to that percentage along a chosen axis,
+        defaulting to the y-axis
 */
 //#content
-export function scrollto(a: number, b?: number) {
+export function scrollto(a: number, b: number | "x" | "y" = "y") {
     a = Number(a)
-    // if b is undefined, Number(b) is NaN.
-    b = Number(b)
-    window.scrollTo(
-        b ? a : window.scrollX,
-        b
-            ? b
-            : a.clamp(0, 100) *
-              (window.document.scrollingElement.scrollHeight / 100)
-    )
+    if (b === "y") {
+        window.scrollTo(
+            window.scrollX,
+            a.clamp(0, 100) * window.document.scrollingElement.scrollHeight / 100)
+    }
+    else if (b === "x") {
+        window.scrollTo(
+            a.clamp(0, 100) * window.document.scrollingElement.scrollWidth / 100,
+            window.scrollY)
+    } else {
+        window.scrollTo(a, Number(b)) // a,b numbers
+    }
 }
 
 //#content
@@ -233,7 +271,7 @@ export async function reload(n = 1, hard = false) {
 /** Reloads all tabs, bypassing the cache if hard is set to true */
 //#background
 export async function reloadall(hard = false){
-    let tabs = await browser.tabs.query({})
+    let tabs = await browser.tabs.query({currentWindow: true})
     let reloadprops = {bypassCache: hard}
     tabs.map(tab => browser.tabs.reload(tab.id, reloadprops))
 }
@@ -259,6 +297,24 @@ export async function reloadhard(n = 1) {
 export function open(...urlarr: string[]) {
     let url = urlarr.join(" ")
     window.location.href = forceURI(url)
+}
+
+/** Go to your homepage(s)
+
+    @param all
+        - if "true", opens all homepages in new tabs
+        - if "false" or not given, opens the last homepage in the current tab
+
+*/
+//#background
+export function home(all: "false" | "true" = "false"){
+    let homepages = config.get("homepages")
+    if (homepages.length > 0){
+        if (all === "false") open(homepages[homepages.length - 1])
+        else {
+            homepages.map(t=>tabopen(t))
+        }
+    }
 }
 
 /** Show this page.
@@ -338,7 +394,7 @@ export function followpage(rel: 'next'|'prev' = 'next') {
 */
 //#content
 export function urlincrement(count = 1){
-    let newUrl = incrementUrl(window.location.href, count)
+    let newUrl = UrlUtil.incrementUrl(window.location.href, count)
 
     if (newUrl !== null) {
         window.location.href = newUrl
@@ -349,7 +405,7 @@ export function urlincrement(count = 1){
  */
 //#content
 export function urlroot (){
-    let rootUrl = getUrlRoot(window.location)
+    let rootUrl = UrlUtil.getUrlRoot(window.location)
 
     if (rootUrl !== null) {
         window.location.href = rootUrl.href
@@ -359,11 +415,93 @@ export function urlroot (){
 /** Go to the parent URL of the current tab's URL
  */
 //#content
-export function urlparent (){
-    let parentUrl = getUrlParent(window.location)
+export function urlparent (count = 1){
+    let parentUrl = UrlUtil.getUrlParent(window.location, count)
 
     if (parentUrl !== null) {
         window.location.href = parentUrl.href
+    }
+}
+
+/**
+ * Open a URL made by modifying the current URL
+ *
+ * @param mode      -t text replace
+ *                  -r regexp replace
+ *                  -q replace the value of the given query
+ *                  -Q delete the given query
+ *                  -g graft a new path onto URL or parent path of it
+ * @param replacement the replacement arguments:
+ *                  -t <old> <new>
+ *                  -r <regexp> <new> [flags]
+ *                  -q <query> <new_val>
+ *                  -Q <query>
+ *                  -g <graftPoint> <newPathTail>
+ *                      - graftPoint > 1 to count from left
+ *                      - graftPoint < 0 to count from right
+ */
+//#content
+export function urlmodify(mode: "-t" | "-r" | "-q" | "-Q" | "-g", ...args: string[]) {
+
+    let oldUrl = new URL(window.location.href)
+    let newUrl = undefined
+
+    switch(mode) {
+
+        case "-t":
+            if (args.length !== 2) {
+                throw new Error("Text replacement needs 2 arguments:"
+                    + "<old> <new>")
+            }
+
+            newUrl = oldUrl.href.replace(args[0], args[1])
+            break
+
+        case "-r":
+            if (args.length < 2 || args.length > 3) {
+                throw new Error("RegExp replacement takes 2 or 3 arguments: "
+                    + "<regexp> <new> [flags]")
+            }
+
+            if (args[2] && args[2].search('/^[gi]+$/') === -1)
+            {
+                throw new Error("RegExp replacement flags can only include 'g', 'i'")
+            }
+
+            let regexp = new RegExp(args[0], args[2])
+            newUrl = oldUrl.href.replace(regexp, args[1])
+            break
+
+        case "-q":
+            if (args.length !== 2) {
+                throw new Error("Query replacement needs 2 arguments:"
+                    + "<query> <new_val>")
+            }
+
+            newUrl = UrlUtil.replaceQueryValue(oldUrl, args[0],
+                args[1])
+            break
+        case "-Q":
+            if (args.length !== 1) {
+                throw new Error("Query deletion needs 1 argument:"
+                    + "<query>")
+            }
+
+            newUrl = UrlUtil.deleteQuery(oldUrl, args[0])
+            break
+
+        case "-g":
+            if (args.length !== 2) {
+                throw new Error("URL path grafting needs 2 arguments:"
+                    + "<graft point> <new path tail>")
+            }
+
+            newUrl = UrlUtil.graftUrlPath(oldUrl, args[1], Number(args[0]))
+            break
+    }
+
+    if (newUrl && newUrl !== oldUrl) {
+        window.location.href = newUrl
     }
 }
 
@@ -374,17 +512,17 @@ export function urlparent (){
     @hidden
  */
 //#content
-export function geturlsforlinks(rel: string){
-    let elems = document.querySelectorAll("link[rel='" + rel + "']") as NodeListOf<HTMLLinkElement>
-    console.log(rel, elems)
+export function geturlsforlinks(reltype = "rel", rel: string){
+    let elems = document.querySelectorAll("link[" + reltype + "='" + rel + "']") as NodeListOf<HTMLLinkElement>
     if (elems)
         return Array.prototype.map.call(elems, x => x.href)
     return []
 }
 
 //#background
-export function zoom(level=0){
+export async function zoom(level=0, rel="false"){
     level = level > 3 ? level / 100 : level
+    if(rel=="true") level += (await browser.tabs.getZoom())
     browser.tabs.setZoom(level)
 }
 
@@ -442,6 +580,8 @@ let LAST_USED_INPUT: HTMLElement = null
  *
  * @param nth   focus the nth input on the page, or "special" inputs:
  *                  "-l": last focussed input
+ *                  "-n": input after last focussed one
+ *                  "-N": input before last focussed one
  *                  "-p": first password field
  *                  "-b": biggest input field
  */
@@ -458,12 +598,35 @@ export function focusinput(nth: number|string) {
     if (nth === "-l") {
         // try to recover the last used input stored as a
         // DOM node, which should be exactly the one used before (or null)
-        inputToFocus = LAST_USED_INPUT
+        if (LAST_USED_INPUT) {
+            inputToFocus = LAST_USED_INPUT
+        } else {
+            // Pick the first input in the DOM.
+            inputToFocus = DOM.getElemsBySelector(INPUTTAGS_selectors,
+                [DOM.isSubstantial])[0] as HTMLElement
 
-        // failed to find that? - look up in sessionStorage?
-        // will need to serialise the last used input to a string that
-        // we can look up in future (tabindex, selector?), perhaps along with
-        // a way to remember the page it was on?
+            // We could try to save the last used element on page exit, but
+            // that seems like a lot of faff for little gain.
+        }
+    }
+    else if (nth === "-n" || nth === "-N") {
+        // attempt to find next/previous input
+        let inputs = DOM.getElemsBySelector(INPUTTAGS_selectors,
+            [DOM.isSubstantial]) as HTMLElement[]
+        if (inputs.length) {
+            let index = inputs.indexOf(LAST_USED_INPUT)
+            if (LAST_USED_INPUT) {
+                if (nth === "-n") {
+                    index++
+                } else {
+                    index--
+                }
+                index = index.mod(inputs.length)
+            } else {
+                index = 0
+            }
+            inputToFocus = inputs[index]
+        }
     }
     else if (nth === "-p") {
         // attempt to find a password input
@@ -493,7 +656,13 @@ export function focusinput(nth: number|string) {
                                          index, [DOM.isSubstantial])
     }
 
-    if (inputToFocus) inputToFocus.focus()
+    if (inputToFocus) {
+        inputToFocus.focus()
+        if (config.get('vimium-gi') && state.mode !== 'input') {
+            state.mode = 'input'
+        }
+    }
+
 }
 
 // Store the last focused element
@@ -673,6 +842,18 @@ export async function undo(){
     }
 }
 
+/** Synonym for [[tabclose]]. */
+//#background
+export async function quit() {
+    tabclose()
+}
+
+/** Convenience shortcut for [[quit]]. */
+//#background
+export async function q() {
+    tabclose()
+}
+
 /** Move the current tab to be just in front of the index specified.
 
     Known bug: This supports relative movement, but autocomple doesn't know
@@ -735,6 +916,12 @@ export async function winclose() {
 export async function qall(){
     let windows = await browser.windows.getAll()
     windows.map((window) => browser.windows.remove(window.id))
+}
+
+/** Convenience shortcut for [[qall]]. */
+//#background
+export async function qa() {
+    qall()
 }
 
 // }}}
@@ -814,6 +1001,20 @@ async function getnexttabs(tabid: number, n?: number) {
 //#background_helper
 import * as controller from './controller'
 
+/** Repeats a `cmd` `n` times.
+    Falls back to the last executed command if `cmd` doesn't exist.
+    Executes the command once if `n` isn't defined either.
+*/
+//#background
+export function repeat(n = 1, ...exstr: string[]) {
+    let cmd = state.last_ex_str
+    if (exstr.length > 0)
+        cmd = exstr.join(" ")
+    logger.debug("repeating " + cmd + " " + n + " times")
+    for (let i = 0; i < n; i++)
+        controller.acceptExCmd(cmd)
+}
+
 /** Split `cmds` on pipes (|) and treat each as it's own command.
 
     Workaround: this should clearly be in the parser, but we haven't come up with a good way to deal with |s in URLs, search terms, etc. yet.
@@ -876,13 +1077,16 @@ export async function clipboard(excmd: "open"|"yank"|"yankshort"|"yankcanon"|"ta
     let urls = []
     switch (excmd) {
         case 'yankshort':
-            urls = await geturlsforlinks("shortlink")
+            urls = await geturlsforlinks("rel", "shortlink")
+            if (urls.length == 0) {
+                urls = await geturlsforlinks("rev", "canonical")
+            }
             if (urls.length > 0) {
                 messageActiveTab("commandline_frame", "setClipboard", [urls[0]])
                 break
             }
         case 'yankcanon':
-            urls = await geturlsforlinks("canonical")
+            urls = await geturlsforlinks("rel", "canonical")
             if (urls.length > 0) {
                 messageActiveTab("commandline_frame", "setClipboard", [urls[0]])
                 break
@@ -982,6 +1186,12 @@ export function bind(key: string, ...bindarr: string[]){
     config.set("nmaps",exstring,key)
 }
 
+/** Set a search engine keyword for use with *open or `set searchengine` */
+//#background
+export function searchsetkeyword(keyword: string, url: string){
+    config.set("searchurls",forceURI(url),keyword)
+}
+
 /** Unbind a sequence of keys so that they do nothing at all.
 
     See also:
@@ -1012,24 +1222,127 @@ export async function reset(key: string){
     browser.storage.sync.set({nmaps})
 }
 
+/** Deletes various privacy-related items.
+
+    The list of possible arguments can be found here:
+    https://developer.mozilla.org/en-US/Add-ons/WebExtensions/API/browsingData/DataTypeSet
+
+    Additional, tridactyl-specific arguments are:
+    - commandline: Removes the in-memory commandline history.
+    - tridactyllocal: Removes all tridactyl storage local to this machine. Use it with
+        commandline if you want to delete your commandline history.
+    - tridactylsync: Removes all tridactyl storage associated with your Firefox Account (i.e, all user configuration, by default).
+    These arguments aren't affected by the timespan parameter.
+
+    Timespan parameter:
+    -t [0-9]+(m|h|d|w)
+
+    Examples:
+    `sanitize all` -> Deletes everything
+    `sanitize history` -> Deletes all history
+    `sanitize commandline tridactyllocal tridactylsync` -> Deletes every bit of data Tridactyl holds
+    `sanitize cookies -t 3d` -> Deletes cookies that were set during the last three days.
+
+*/
+//#background
+export async function sanitize(...args: string[]) {
+    let flagpos = args.indexOf("-t")
+    let since = {}
+    // If the -t flag has been given and there is an arg after it
+    if (flagpos > -1) {
+        if (flagpos < args.length - 1) {
+            let match = args[flagpos + 1].match('^([0-9])+(m|h|d|w)$')
+            // If the arg of the flag matches Pentadactyl's sanitizetimespan format
+            if (match !== null && match.length == 3) {
+                // Compute the timespan in milliseconds and get a Date object
+                let millis = parseInt(match[1]) * 1000
+                switch (match[2]) {
+                    case 'w': millis *= 7
+                    case 'd': millis *= 24
+                    case 'h': millis *= 60
+                    case 'm': millis *= 60
+                }
+                since = { "since": (new Date()).getTime() - millis }
+            } else {
+                throw new Error(":sanitize error: expected time format: ^([0-9])+(m|h|d|w)$, given format:" + args[flagpos+1])
+            }
+        } else {
+            throw new Error(":sanitize error: -t given but no following arguments")
+        }
+    }
+
+    let dts = {
+        "cache": false,
+        "cookies": false,
+        "downloads": false,
+        "formData": false,
+        "history": false,
+        "localStorage": false,
+        "passwords": false,
+        "serviceWorkers": false,
+        // These are Tridactyl-specific
+        "commandline": false,
+        "tridactyllocal": false,
+        "tridactylsync": false,
+        /* When this one is activated, a lot of errors seem to pop up in
+           the console. Keeping it disabled is probably a good idea.
+        "pluginData": false,
+         */
+        /* These 3 are supported by Chrome and Opera but not by Firefox yet.
+        "fileSystems": false,
+        "indexedDB": false,
+        "serverBoundCertificates": false,
+         */
+    }
+    if (args.find(x => x == "all") !== undefined) {
+        for (let attr in dts)
+            dts[attr] = true
+    } else {
+        // We bother checking if dts[x] is false because
+        // browser.browsingData.remove() is very strict on the format of the
+        // object it expects
+        args.map(x => { if (dts[x] === false) dts[x] = true })
+    }
+    // Tridactyl-specific items
+    if (dts.commandline === true)
+        state.cmdHistory = []
+    delete dts.commandline
+    if (dts.tridactyllocal === true)
+        browser.storage.local.clear()
+    delete dts.tridactyllocal
+    if (dts.tridactylsync === true)
+        browser.storage.sync.clear()
+    delete dts.tridactylsync
+    // Global items
+    browser.browsingData.remove(since, dts)
+}
+
 /** Bind a quickmark for the current URL to a key.
 
     Afterwards use go[key], gn[key], or gw[key] to [[open]], [[tabopen]], or
     [[winopen]] the URL respectively.
-    
+
 */
 //#background
-export async function quickmark(key: string) {
+export async function quickmark(key: string, ...addressarr: string[]) {
     // ensure we're binding to a single key
     if (key.length !== 1) {
         return
     }
 
-    let address = (await activeTab()).url
-    // Have to await these or they race!
-    await bind("gn" + key, "tabopen", address)
-    await bind("go" + key, "open", address)
-    await bind("gw" + key, "winopen", address)
+    if (addressarr.length <= 1) {
+        let address = addressarr.length == 0 ? (await activeTab()).url : addressarr[0]
+        // Have to await these or they race!
+        await bind("gn" + key, "tabopen", address)
+        await bind("go" + key, "open", address)
+        await bind("gw" + key, "winopen", address)
+    } else {
+        let compstring = addressarr.join(" | tabopen ")
+        let compstringwin = addressarr.join(" | winopen ")
+        await bind("gn" + key, "composite tabopen", compstring)
+        await bind("go" + key, "composite open", compstring)
+        await bind("gw" + key, "composite winopen", compstringwin)
+    }
 }
 
 //#background
@@ -1043,14 +1356,17 @@ export function get(target: string, property?: string){
     (i.e. not nmaps.)
 
     It can be used on any string <-> string settings found [here](/static/docs/modules/_config_.html#defaults)
- 
+
 */
 //#background
-export function set(setting: string, value?: string){
-    // We don't support setting objects yet
-    if (setting != "nmaps"){
-        if (value !== undefined){
-            config.set(setting,value)
+export function set(setting: string, ...value: string[]){
+    // We only support setting strings or arrays: not objects
+    let current = config.get(setting)
+    if ((Array.isArray(current) || typeof current == "string")) {
+        if (value.length > 0){
+            if (!Array.isArray(current)){
+                config.set(setting,value[0])
+            } else config.set(setting,value)
         } else fillcmdline_notrail("set " + setting + " " + config.get(setting))
     }
 }
@@ -1088,14 +1404,24 @@ import * as hinting from './hinting_background'
         - -r read an element's text with text-to-speech
         - -i view an image
         - -I view an image in a new tab
+        - -k delete an element from the page
+        - -s save (download) the linked resource
+        - -S save the linked image
+        - -a save-as the linked resource
+        - -A save-as the linked image
         - -; focus an element
         - -# yank an element's anchor URL to clipboard
         - -c [selector] hint links that match the css selector
           - `bind ;c hint -c [class*="expand"],[class="togg"]` works particularly well on reddit and HN
 
+    Excepting the custom selector mode and background hint mode, each of these
+    hint modes is available by default as `;<option character>`, so e.g. `;y`
+    to yank a link's target.
+
+    To open a hint in the background, the default bind is `F`.
+
     Related settings:
         "hintchars": "hjklasdfgyuiopqwertnmzxcvb"
-        "hintorder": "normal" or "reverse"
 */
 //#background
 export function hint(option?: string, selectors="") {
@@ -1104,6 +1430,11 @@ export function hint(option?: string, selectors="") {
     else if (option === "-p") hinting.hintPageTextYank()
     else if (option === "-i") hinting.hintImage(false)
     else if (option === "-I") hinting.hintImage(true)
+    else if (option === "-k") hinting.hintKill()
+    else if (option === "-s") hinting.hintSave("link", false)
+    else if (option === "-S") hinting.hintSave("img", false)
+    else if (option === "-a") hinting.hintSave("link", true)
+    else if (option === "-A") hinting.hintSave("img", true)
     else if (option === "-;") hinting.hintFocus()
     else if (option === "-#") hinting.hintPageAnchorYank()
     else if (option === "-c") hinting.hintPageSimple(selectors)
@@ -1131,7 +1462,7 @@ export async function gobble(nChars: number, endCmd: string) {
 }
 
 // }}}
-//
+
 
 // {{{TEXT TO SPEECH
 
@@ -1171,10 +1502,10 @@ export async function ttsread(mode: "-t" | "-c", ...args: string[]) {
         if (args.length > 0) {
             tssReadFromCss(args[0])
         } else {
-            console.log("Error: no CSS selector supplied")
+            throw "Error: no CSS selector supplied"
         }
     } else {
-        console.log("Unknown mode for ttsread command: " + mode)
+        throw "Unknown mode for ttsread command: " + mode
     }
 }
 
@@ -1213,7 +1544,7 @@ export async function ttscontrol(action: string) {
     if (ttsAction) {
         TTS.doAction(ttsAction)
     } else {
-        console.log("Unknown text-to-speech action: " + action)
+        throw new Error("Unknown text-to-speech action: " + action)
     }
 }
 
@@ -1223,12 +1554,13 @@ export async function ttscontrol(action: string) {
 /** Add or remove a bookmark.
 *
 * Optionally, you may give the bookmark a title. If no URL is given, a bookmark is added for the current page.
-* 
+*
 * If a bookmark already exists for the URL, it is removed.
 */
 //#background
-export async function bmark(url?: string, title = ""){
+export async function bmark(url?: string, ...titlearr: string[] ){
     url = url === undefined ? (await activeTab()).url : url
+    let title = titlearr.join(" ")
     let dupbmarks = await browser.bookmarks.search({url})
     dupbmarks.map((bookmark) => browser.bookmarks.remove(bookmark.id))
     if (dupbmarks.length == 0 ) {browser.bookmarks.create({url, title})}

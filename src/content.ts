@@ -14,6 +14,7 @@ console.log("Tridactyl content script loaded, boss!")
 // Add various useful modules to the window for debugging
 import * as commandline_content from './commandline_content'
 import * as convert from './convert'
+import * as config from './config'
 import * as dom from './dom'
 import * as excmds from './excmds_content'
 import * as hinting_content from './hinting'
@@ -29,6 +30,7 @@ import * as keyseq from './keyseq'
     browserBg: webext.browserBg,
     commandline_content,
     convert,
+    config,
     dom,
     excmds,
     hinting_content,
