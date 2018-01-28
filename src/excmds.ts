@@ -67,6 +67,7 @@
 import * as Messaging from "./messaging"
 import {l} from './lib/webext'
 import state from "./state"
+import Mark from 'mark.js'
 
 //#content_omit_line
 import "./number.clamp"
@@ -240,6 +241,15 @@ export function scrollline(n = 1) {
 //#content
 export function scrollpage(n = 1) {
     window.scrollBy(0, window.innerHeight * n)
+}
+
+//#content
+export function find(query: string) {
+    // Proof of concept
+    // Obviously we need a new mode really; probably copy-paste hinting mode
+    const MARK_INSTANCE = new Mark(window.document)
+    MARK_INSTANCE.unmark()
+    MARK_INSTANCE.mark(query)
 }
 
 /** @hidden */
