@@ -17,7 +17,7 @@ Remember that tridactyl cannot run on any page on addons.mozilla.org, about:\*, 
 Like Vim, Tridactyl is modal, with the default mode being "normal mode". In
 "normal mode", many functions are available using keybindings. In "command
 mode" (when the command line is shown), you can execute more complex commands,
-known as "ex-commands". All Tridactyl functionality can be accessed by 
+known as "ex-commands". All Tridactyl functionality can be accessed by
 ex-commands. You can bind any ex-command to a normal-mode shortcut.
 
 ### Default normal-mode bindings
@@ -284,13 +284,20 @@ cVim and vimium implement some kind of vim experience using webextensions. Neith
 5. can't override some browser shortcuts
 6. bad js kills the UI (but the same bad js locks up the whole of firefox, so y'know...)
 
-In conclusion, a privileged keyboard webextension will help with #1,2,4,5; #3,#1 (for visual changes) and maybe #2 need a ui API. #1 might not be applicable to ff content scripts.
+In conclusion, a privileged keyboard webextension will help with #1,2,4,5; #3,#1
+(for visual changes) and maybe #2 need a ui API. #1 might not be applicable to
+ff content scripts.
 
 #### Vimium
 
 https://github.com/philc/vimium
 
-Very lightweight, but what is there is actually really nice. Easily fixable issues: no command mode for the features they do have; some odd default maps; mappings are done by function name rather than key ('map b Vomnibar.activateTabSelection' rather than 'map b T'). Possibly fixable issues: plugin support (source), arbitrary js eval for mappings, marks are per tab, jumplist.
+Very lightweight, but what is there is actually really nice. Easily fixable
+issues: no command mode for the features they do have; some odd default maps;
+mappings are done by function name rather than key ('map b
+Vomnibar.activateTabSelection' rather than 'map b T'). Possibly fixable issues:
+plugin support (source), arbitrary js eval for mappings, marks are per tab,
+jumplist.
 
 Missing:
 
@@ -308,7 +315,10 @@ Improvements over vimperator:
 
 https://github.com/jinzhu/vrome
 
-Vim mode chromium plugin written at least partly in coffeescript. Source is not documented, but it's not so bad either (at least it's in coffeescript). Default maps are not to my liking, but that's hardly surprising. I don't see how to make new maps, tho. UI appearance is poor, appears to be influenced by context's css.
+Vim mode chromium plugin written at least partly in coffeescript. Source is not
+documented, but it's not so bad either (at least it's in coffeescript). Default
+maps are not to my liking, but that's hardly surprising. I don't see how to make
+new maps, tho. UI appearance is poor, appears to be influenced by context's css.
 
 Missing:
 
@@ -319,13 +329,16 @@ Missing:
 * plugin/eval support
 * jumplist, etc
 
-May be worth taking code from, could consider forking it, but would need to review code more carefully for quality issues.
+May be worth taking code from, could consider forking it, but would need to
+review code more carefully for quality issues.
 
 #### cVim
 
 https://github.com/1995eaton/chromium-vim
 
-Written in uncommented javascript. But user experience is pretty good. Autocompletion in command mode is very good and it has a decent chunk of the vimperator features implemented.
+Written in uncommented javascript. But user experience is pretty good.
+Autocompletion in command mode is very good and it has a decent chunk of the
+vimperator features implemented.
 
 Missing:
 
@@ -371,9 +384,12 @@ Generated parsers (command and normal mode):
 * More permissive
 * Time sensitive
 
-* In vim, actions compose as you write them (d takes a motion as an argument, for example), I can't think of any examples of this in vimperator: actions sometimes take a count or argument, but that argument is never an action.
+* In vim, actions compose as you write them (d takes a motion as an argument,
+  for example), I can't think of any examples of this in vimperator: actions
+  sometimes take a count or argument, but that argument is never an action.
 
-* If actions did compose, we would have to give them types, as vim does for motions, and the parsing would be less trivial.
+* If actions did compose, we would have to give them types, as vim does for
+  motions, and the parsing would be less trivial.
 
 Autocomplete functions for commands:
 
